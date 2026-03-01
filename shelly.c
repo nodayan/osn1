@@ -83,6 +83,32 @@ char* path_command(char* command) {
     return NULL;
 }
 
+// maakt een functie mogelijk (beetje van mijn vorig jaar project gepakt)
+void spawn(char *fullpath, char *tokens[], int in_fd, int out_fd) {
+
+    pid_t pid = fork();
+
+    if (pid == 0) {  // CHILD
+
+        // If input is not standard input, redirect
+        if (in_fd != STDIN_FILENO) {
+            dup2(in_fd, STDIN_FILENO);
+            close(in_fd);
+        }
+
+        // If output is not standard output, redirect
+        if (out_fd != STDOUT_FILENO) {
+            dup2(out_fd, STDOUT_FILENO);
+            close(out_fd);
+        }
+
+        execv(fullpath, tokens);
+
+        perror("execv failed");
+        exit(1);
+    }
+}
+
 
 int main() {
 	char userinput[1024];
