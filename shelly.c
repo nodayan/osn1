@@ -111,6 +111,79 @@ void spawn(char *fullpath, char *tokens[], int in_fd, int out_fd) {
 
 
 int main() {
+    char userinput[1024];
+
+    while (true) {
+        if (!read_input(userinput))
+        	break;
+
+        char *commands[100];
+        int ncommands = 0;
+
+        char *cmd = strtok(userinput, "|");
+        //commands in array zetten en opsplitsen
+        while (cmd != NULL && ncommands < 100) {
+
+            // spaties weghalen, weet niet of dit helemaal klopt
+            while (*cmd == ' ') cmd++;
+
+            // Lege commandos
+            if (*cmd == '\0') {
+                printf("Invalid pipeline\n");
+                ncommands = 0;
+                break;
+            }
+
+            commands[ncommands++] = cmd;
+            cmd = strtok(NULL, "|");
+        }
+    
+    if (ncommands == 0) continue;
+    if (ncommands == 1) {
+
+        char *tokens[512];
+        int ntokens = tokenized(commands[0], tokens);
+        if (ntokens == 0) continue;
+
+        if (strcmp(tokens[0], "exit") == 0) break;
+
+        if (strcmp(tokens[0], "cd") == 0) {
+            char *target = tokens[1];
+            if (target == NULL) target = getenv("HOME");
+            if (target == NULL) target = "/";
+            if (chdir(target) != 0) perror("cd");
+            continue;
+        }
+
+        char *fullpath = path_command(tokens[0]);
+        if (fullpath == NULL) {
+            printf("Command not found\n");
+            continue;
+        }
+
+        spawn(fullpath, tokens, STDIN_FILENO, STDOUT_FILENO);
+        wait(NULL);
+        free(fullpath);
+    }
+    //meerdere pipelines implementatie MOET NOG
+    else {
+
+    }
+    
+
+
+
+    }
+}
+
+
+
+
+
+
+
+
+    /* WEGECOMMENT WAT EERST MAIN WAS HAAL DEZE REGEL WEG VOOR WERKENDE MAIN 
 	char userinput[1024];
 
     while (true) {
