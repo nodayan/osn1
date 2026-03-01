@@ -1,17 +1,22 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/stat.h>     // voor stat()
+#include <sys/wait.h>     // voor: wait()
 
 void print_prompt() {
     char cwd[1024];                        
     if (getcwd(cwd, sizeof(cwd)) == NULL) { 
-        strcpy(cwd, "coldn't get current directory");                
+        strcpy(cwd, "couldn't get current directory");                
     }
 
-    printf("%s$ ", cwd);                    // directory met $ erachter
-    fflush(stdout);                         // laat prompt zien op scherm zonder \n
+    printf("%s$ ", cwd);                   
+    fflush(stdout);                        
 }
 
-bool read_input(char *userinput) {   //bool van functie gemaakt want makkelijkr zo :)
+bool read_input(char *userinput) {   
     print_prompt();
     if (fgets(userinput, 1024, stdin) == NULL) {
         printf("\n");
@@ -21,11 +26,11 @@ bool read_input(char *userinput) {   //bool van functie gemaakt want makkelijkr 
 }
 
 int tokenized(char *userinput, char *tokens[]) {
-    int teller = 0;                          // token teller
+    int teller = 0;                          
 
-    char *tok = strtok(userinput, " \t\r\n"); // tokenize en split met een spatie tab of nieuwe line
+    char *tok = strtok(userinput, " \t\r\n");
 
-    while (tok != NULL && teller < 511) {      //max aantal tokens op 512
+    while (tok != NULL && teller < 511) {      
         tokens[teller] = tok;                 
         teller++;                          
         tok = strtok(NULL, " \t\r\n");        
@@ -36,35 +41,117 @@ int tokenized(char *userinput, char *tokens[]) {
 }
 
 
+// =======================
+// NEW FUNCTION (TASK 2)
+// =======================
+
+char* path_command(char* command) {
+
+    // voor commands met slash gelijk return
+    if (strchr(command, '/') != NULL) {
+        return strdup(command);
+    }
+
+    char *path_env = getenv("PATH");
+    if (path_env == NULL) return NULL;
+
+    // copie maken
+    char *path_copy = strdup(path_env);
+    if (path_copy == NULL) return NULL;
+
+    char *dir = strtok(path_copy, ":");
+
+    while (dir != NULL) {
+
+        char test_path[1024];
+
+        // full path voor bv: /usr/bin/ls
+        snprintf(test_path, sizeof(test_path), "%s/%s", dir, command);
+
+        struct stat st;
+
+        // file exist check
+        if (stat(test_path, &st) == 0) {
+            free(path_copy);
+            return strdup(test_path);
+        }
+
+        dir = strtok(NULL, ":");
+    }
+
+    free(path_copy);
+    return NULL;
+}
+
+
 int main() {
 	char userinput[1024];
 
     while (true) {
-        if (!read_input(userinput))   // ga uit programma als geen line gelezen wordt
+        if (!read_input(userinput))
         	break;
 
         char *tokens[512];				
         int ntokens = tokenized(userinput, tokens);
-        if (ntokens == 0) continue;		// ga door als enter op een lege line
+        if (ntokens == 0) continue;
 
-        if (strcmp(tokens[0], "exit") == 0) {   // ga eruit als eerste woord exit is
+        if (strcmp(tokens[0], "exit") == 0) {
             break;
         }
 
-        if (strcmp(tokens[0], "cd") == 0) {	// eerste woord is cd
+        if (strcmp(tokens[0], "cd") == 0) {
             char *target = tokens[1];
-            if (target == NULL) target = getenv("HOME");	//als er geen dir is gegeven ga automatisch naar home
-            if (target == NULL) target = "/";			// als er geen home "bestaat", ga naar de andere wortel dir
-            if (chdir(target) != 0) perror("cd");		// returnet een gedetailleerde error van waarom de dir niet gewisseld kan worden, niet 0 is error
+            if (target == NULL) target = getenv("HOME");
+            if (target == NULL) target = "/";
+            if (chdir(target) != 0) perror("cd");
             continue;
         }
 
-        printf("TOKENS: ");
-        for (int i = 0; tokens[i] != NULL; i++) {
-            printf("[%s] ", tokens[i]);
+        // ============================
+        // NEW test voor task 2
+        // ============================
+        
+        char *fullpath = path_command(tokens[0]);
+
+        if (fullpath == NULL) {
+            printf("Command not found\n");
+            continue;
         }
-        printf("\n");
+
+        // ============================
+        // NEW: child process met fork geprobeerd
+        // ============================
+        
+        pid_t pid = fork();
+
+        if (pid < 0) {
+            perror("fork failed");
+            free(fullpath);
+            continue;
+        }
+
+        // ============================
+        // CHILD PROCESS
+        // ============================
+        if (pid == 0) {
+
+            // Execute the command
+            execv(fullpath, tokens);
+
+            // If execv returns, something failed
+            perror("execv failed");
+            exit(1);
+        }
+
+        // ============================
+        // PARENT PROCESS new
+        // ============================
+        else {
+            wait(NULL);  // wait for child to finish
+        }
+
+        free(fullpath);  // prevent memory leak
     }
+
     return 0;
 }
-
